@@ -2,6 +2,8 @@ import httpx
 from typing import Dict, Any
 import pandas as pd
 import asyncio
+import nest_asyncio
+nest_asyncio.apply()
 
 # need to have serviceKey saved in a txt file named serviceKey.txt
 def read_service_key_from_text(file_path: str) -> str:
@@ -17,26 +19,47 @@ def read_service_key_from_text(file_path: str) -> str:
     with open(file_path, "r") as file:
         for line in file:
             if line.startswith("serviceKey"):
-                return line.split("=", 1)[1].strip()
+                return line.split("=", 1)[1].strip().strip('\"\'')
     raise ValueError("serviceKey not found in the file.")
 
 # using default servicekey
 service_key = read_service_key_from_text('serviceKey.txt')
 
 # take base date and fetch all of the listing, returning a df
-async def main(
+def main(
     service_key: str = service_key,
     result_type: str = 'json',
-    basDt: str = '20241121'
+    basDt: str = '20241121',
+    **kwargs,
 ) -> pd.DataFrame:
-        
-    return fetch_all_listings(service_key=service_key, result_type=result_type, basDt=basDt)
+    kwargs.update({
+        "service_key": service_key,
+        "result_type": result_type,
+        "basDt": basDt,
+    })
+    df = fetch_all_listings(**kwargs)
+    return df
 
-
-async def fetch_all_listings(
+def fetch_all_listings(
     service_key: str,
     result_type: str = "json",
-    basDt: str = '20241121'
+    basDt: str = '20241121',
+    **kwargs,
+) -> pd.DataFrame:
+    kwargs.update({
+        "service_key": service_key,
+        "result_type": result_type,
+        "basDt": basDt,
+    })
+    return asyncio.run(
+        fetch_all_listings_async(**kwargs)
+        )
+
+async def fetch_all_listings_async(
+    service_key: str,
+    result_type: str = "json",
+    basDt: str = '20241121',
+    **kwargs
 ) -> pd.DataFrame:
     """
     Fetch all stock listings for a given base date, handling pagination.
@@ -52,35 +75,35 @@ async def fetch_all_listings(
     all_items = []  # To store all records
     page_no = 1
     num_of_rows = 10000
+    
+    kwargs.update({
+        "service_key": service_key,
+        "result_type": result_type,
+        "basDt": basDt,
+        "page_no": page_no,
+        "num_of_rows": num_of_rows,        
+    })
 
     while True:
         # Fetch data for the current page
-        response = await fetch_and_handle_stock_info(
-            service_key=service_key,
-            num_of_rows=num_of_rows,
-            page_no=page_no,
-            result_type=result_type,
-            basDt=basDt
-        )
+        response = await fetch_and_handle_stock_info(**kwargs)        
 
         # Check if there's an error in the response
         if "error" in response:
             print(f"Error on page {page_no}: {response['error']}")
             break
 
-        # Parse the response into a DataFrame
-        df = await parse_stock_info_httpx(response)
 
         # Append to the list of all items
-        if df.empty:
+        if response.empty:
             break  # Stop when no more data is returned
-        all_items.append(df)
+        all_items.append(response)
 
         # Increment page number for the next request
         page_no += 1
 
         # Stop if fewer rows than expected are returned (last page)
-        if len(df) < num_of_rows:
+        if len(response) < num_of_rows:
             break
 
     # Combine all DataFrames into one
@@ -94,18 +117,18 @@ async def fetch_all_listings(
 
 async def fetch_and_handle_stock_info(
     service_key: str,
-    num_of_rows: int = 1,
+    num_of_rows: int = 10,
     page_no: int = 1,
     result_type: str = "json",
     basDt: str = '20241121',
     **kwargs
-) -> Dict[str, Any]:
+) -> pd.DataFrame:
     """
     Fetch stock information from the KRX Listed Stocks API and handle errors.
 
     Args:
         service_key (str): Your API key.
-        num_of_rows (int): Number of rows per page (default is 1).
+        num_of_rows (int): Number of rows per page (default is 10).
         page_no (int): Page number to fetch (default is 1).
         result_type (str): Format of the response, either 'xml' or 'json' (default is 'json').
         kwargs: Additional query parameters (e.g., basDt, likeIsinCd, etc.).
@@ -128,6 +151,9 @@ async def fetch_and_handle_stock_info(
             # Send the GET request
             response = await client.get(base_url, params=params)
             response.raise_for_status()
+            # curiously api returns 200 when service key is not registered. so manually pulling it out.
+            if "SERVICE_KEY_IS_NOT_REGISTERED_ERROR" in str(response.content):
+                raise ValueError("Service key is invalid or not recognized.")
 
             # Parse JSON if the response is in JSON format
             if result_type.lower() == "json":
@@ -136,8 +162,8 @@ async def fetch_and_handle_stock_info(
                 result_code = data.get("response", {}).get("header", {}).get("resultCode", "")
                 if result_code != "00":
                     error_message = interpret_error_code_httpx(result_code)
-                    return {"error": f"API returned error: {error_message}"}
-                return data
+                    raise ValueError(f"API returned error of {result_code}: {error_message}")
+                return await parse_stock_info_httpx(data)
             else:
                 return response.text
 
@@ -181,12 +207,12 @@ async def parse_stock_info_httpx(response: Dict[str, Any]) -> pd.DataFrame:
         pd.DataFrame: A DataFrame containing the parsed stock information.
     """
     if "response" not in response or "body" not in response["response"]:
-        print("Invalid response format.")
+        print("Invalid response format")
         return pd.DataFrame()
 
     items = response["response"]["body"].get("items", {}).get("item", [])
     if not items:
-        print("No stock information found.")
+        print("No stock information found. Check if Bsdt is a business day.")
         return pd.DataFrame()
 
     # Create a list of dictionaries to build the DataFrame
@@ -195,6 +221,7 @@ async def parse_stock_info_httpx(response: Dict[str, Any]) -> pd.DataFrame:
             "Stock Name": item.get("itmsNm", "N/A"),
             "Corporation Name": item.get("corpNm", "N/A"),
             "KRX Stock Code": item.get("srtnCd", "N/A"),
+            "Corporation Reg Number": item.get("crno", "N/A"),
             "Market Type": item.get("mrktCtg", "N/A"),
         }
         for item in items
@@ -206,9 +233,51 @@ async def parse_stock_info_httpx(response: Dict[str, Any]) -> pd.DataFrame:
 
 
 
-# take name either in Korean or English and return the code
+# take name either in Korean and return the stock
+def fetch_stock_by_name(
+    service_key: str,
+    result_type: str = "json",
+    basDt: str = '20241121',
+    likeItmsNm: str = '삼성전자',
+    **kwargs
+) -> pd.DataFrame:
+    """
+    takes a Korean keyword and returns the results that includes the keyword
+    returns 10 results by default, pass num_of_rows to change
+    """
+    kwargs.update({
+        "service_key": service_key,
+        "result_type": result_type,
+        "basDt": basDt,
+        "likeItmsNm":likeItmsNm,
+    })
+    return asyncio.run(fetch_and_handle_stock_info(**kwargs))
 
 # take name either in Korean or English and return the code to be fed into TradingView
+def fetch_code_by_name(
+    service_key: str,
+    result_type: str = "json",
+    basDt: str = '20241121',
+    likeItmsNm: str = '삼성전자',
+    **kwargs
+) -> list:
+    """
+    takes a Korean keyword and returns a list of stock codes that can be fed into TradingView
+    returns 10 results by default, pass num_of_rows to change
+    """
+    kwargs.update({
+        "service_key": service_key,
+        "result_type": result_type,
+        "basDt": basDt,
+        "likeItmsNm":likeItmsNm,
+    })
+    df = asyncio.run(fetch_and_handle_stock_info(**kwargs))
+    try:
+        result = df['KRX Stock Code'].str.replace("^A", "KRX:", regex=True).to_list()
+        return result
+    except KeyError:
+        print("No stock information found. Check if company name is correct.")
+
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
