@@ -2,13 +2,6 @@ import httpx
 from typing import Dict, Any
 import pandas as pd
 import asyncio
-from datetime import datetime, timedelta
-import os
-
-# Get yesterday's date
-today = datetime.now()
-yesterday = today - timedelta(days=1)
-yesterday_str = yesterday.strftime('%Y%m%d')
 
 # need to have serviceKey saved in a txt file named serviceKey.txt
 def read_service_key_from_text(file_path: str) -> str:
@@ -16,14 +9,14 @@ def read_service_key_from_text(file_path: str) -> str:
     Reads the serviceKey from a plain text file.
     
     Args:
-        file_path (str): Path to the servicekey.config file.
+        file_path (str): Path to the servicekey.txt file.
         
     Returns:
         str: The service key.
     """
     with open(file_path, "r") as file:
         for line in file:
-            if line.startswith("serviceKey="):
+            if line.startswith("serviceKey"):
                 return line.split("=", 1)[1].strip()
     raise ValueError("serviceKey not found in the file.")
 
@@ -34,7 +27,7 @@ service_key = read_service_key_from_text('serviceKey.txt')
 async def main(
     service_key: str = service_key,
     result_type: str = 'json',
-    basDt: str = yesterday_str
+    basDt: str = '20241121'
 ) -> pd.DataFrame:
         
     return fetch_all_listings(service_key=service_key, result_type=result_type, basDt=basDt)
@@ -43,7 +36,7 @@ async def main(
 async def fetch_all_listings(
     service_key: str,
     result_type: str = "json",
-    basDt: str = None  # Default is None; can dynamically use yesterday_str
+    basDt: str = '20241121'
 ) -> pd.DataFrame:
     """
     Fetch all stock listings for a given base date, handling pagination.
@@ -51,14 +44,14 @@ async def fetch_all_listings(
     Args:
         service_key (str): Your API key.
         result_type (str): Format of the response, 'json' or 'xml'. Default is 'json'.
-        basDt (str): Base date for filtering data (default is yesterday's date).
+        basDt (str): Base date for filtering data (default: '20241121'). If omitted, the API returns all data, potentially exceeding 3 million items.
 
     Returns:
         pd.DataFrame: DataFrame containing all stock listings.
     """
     all_items = []  # To store all records
     page_no = 1
-    num_of_rows = 100  # Fetch 100 rows per page (adjust if needed)
+    num_of_rows = 10000
 
     while True:
         # Fetch data for the current page
@@ -104,6 +97,7 @@ async def fetch_and_handle_stock_info(
     num_of_rows: int = 1,
     page_no: int = 1,
     result_type: str = "json",
+    basDt: str = '20241121',
     **kwargs
 ) -> Dict[str, Any]:
     """
@@ -125,6 +119,7 @@ async def fetch_and_handle_stock_info(
         "numOfRows": num_of_rows,
         "pageNo": page_no,
         "resultType": result_type,
+        "basDt": basDt,
         **kwargs,
     }
 
