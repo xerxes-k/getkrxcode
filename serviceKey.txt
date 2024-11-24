@@ -1,0 +1,2 @@
+# (Decoding)
+serviceKey = your key here
