@@ -1,4 +1,4 @@
-import project
+import src.getkrxcode.project as project
 import pytest
 import pandas as pd
 
