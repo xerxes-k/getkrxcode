@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: getkrxcode
-Version: 0.1.1a1
+Version: 0.1.2
 Summary: a package to get KRX stock code using data.go.kr API
 Author-email: kimmh <mluchk@gmail.com>
 Project-URL: Homepage, https://github.com/xerxes-k/getkrxcode
