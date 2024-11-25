@@ -23,11 +23,11 @@ def read_service_key_from_text(file_path: str) -> str:
     raise ValueError("serviceKey not found in the file.")
 
 # using default servicekey
-service_key = read_service_key_from_text('serviceKey.txt')
+# service_key = read_service_key_from_text('src\getkrxcode\serviceKey.txt')
 
 # take base date and fetch all of the listing, returning a df
 def main(
-    service_key: str = service_key,
+    service_key: str = 'service_key',
     result_type: str = 'json',
     basDt: str = '20241121',
     **kwargs,

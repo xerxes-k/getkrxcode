@@ -1,6 +1,6 @@
 [project]
 name = "getkrxcode"
-version = "0.1.0"
+version = "0.1.1-alpha1"
 authors = [
   { name="kimmh", email="mluchk@gmail.com" },
 ]
@@ -14,8 +14,8 @@ classifiers = [
 ]
 
 dependencies = [
-    "httpx==0.27.2",
-    "pandas==2.2.3",
+    "httpx>=0.27.2",
+    "pandas>=2.2.3",
 ]
 
 [project.urls]
