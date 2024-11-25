@@ -10,8 +10,8 @@ This project retrieves stock codes for companies listed on the Korea Exchange (K
 
 1. 먼저 https://www.data.go.kr/data/15094775/openapi.do 에서 서비스 키를 발급 받으세요
 - first, get your service key from https://www.data.go.kr/en/data/15094775/openapi.do
-2. 발급 받은 서비스 키를 project.py가 있는 폴더에 serviceKey.txt라는 파일에 저장하세요
-- store your service key in a txt file called serviceKey.txt in the same folder as project.py
+2. 디코딩(decoding) 서비스 키를 필요한 곳에서 로드하여 사용합니다
+- load the decoding version of service key to use
 
 ### 주요 기능 functions
 
